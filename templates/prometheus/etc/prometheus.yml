@@ -1,0 +1,63 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+       - thebox.planetmike.org:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  - "alert.rules"      
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+
+# A scrape configuration containing exactly one endpoint to scrape:
+
+scrape_configs:
+  - job_name: prometheus
+    honor_timestamps: true
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+    - targets:
+      - thebox.planetmike.org:9090
+   
+  - job_name: 'traefik'
+    static_configs:
+    - targets: ['thebox.planetmike.org:8082']
+
+  - job_name: 'thebox'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+    - targets:  ['thebox.planetmike.org:9100']
+      
+  - job_name: 'linux'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+    - targets:  
+{% for nodename in nodes_linux %}
+      - "{{ nodename }}:9100"
+{% endfor %}
+
+  - job_name: 'windows'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+    - targets:  
+{% for nodename in nodes_windows %}
+      - "{{ nodename }}:9182"
+{% endfor %}

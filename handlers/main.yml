@@ -1,0 +1,23 @@
+---
+ 
+- name: restart journald
+  service:
+    name: systemd-journald
+    state: restarted
+
+- name: restart firewalld
+  service:
+    name: firewalld
+    state: restarted
+
+- name: restart cockpit
+  service:
+    name: cockpit.socket
+    state: restarted
+
+- name: relabel /u01
+  command: restorecon -Rv /u01
+
+- name: relabel /u02
+  command: restorecon -Rv /u02
+

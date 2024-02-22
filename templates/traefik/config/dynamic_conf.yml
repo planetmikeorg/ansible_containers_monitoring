@@ -1,0 +1,47 @@
+http:
+  routers:
+    grafana-router:
+      rule: "Host(`{{ services_fqdn }}`)"
+      service: grafana-service
+      # middlewares:
+      #   - grafana-stripprefix
+
+    prometheus-router:
+      rule: "PathPrefix(`/prometheus`)"
+      service: prometheus-service
+      middlewares:
+        - prometheus-stripprefix
+
+    loki-router:
+      rule: "PathPrefix(`/loki`)"
+      service: loki-service
+      middlewares:
+        - loki-stripprefix
+
+  services:
+    grafana-service:
+      loadBalancer:
+        servers:
+        - url: "http://thebox.planetmike.org:3000"
+    prometheus-service:
+      loadBalancer:
+        servers:
+        - url: "http://thebox.planetmike.org:9000"
+    loki-service:
+      loadBalancer:
+        servers:
+        - url: "http://thebox.planetmike.org:3100"
+
+  # middlewares:
+  #   grafana-stripprefix:
+  #     stripPrefix:
+  #       prefixes:
+  #         - "/metrics"
+    prometheus-stripprefix:
+      stripPrefix:
+        prefixes:
+          - "/prometheus"
+    loki-stripprefix:
+      stripPrefix:
+        prefixes:
+          - "/loki"

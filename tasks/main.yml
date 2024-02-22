@@ -1,0 +1,238 @@
+---
+- name: Check required directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner.split(':')[0] }}"
+    group: "{{ item.owner.split(':')[1] }}"    
+    mode: '0774'
+  loop: "{{ directories }}"
+
+- name: Update Images
+  block:
+    - name: Prometheus image
+      containers.podman.podman_image:
+        name: "{{ prometheus.image }}"
+
+    - name: Alertmanager image
+      containers.podman.podman_image:
+        name: "{{ alertmanager.image }}"
+
+    - name: Loki image
+      containers.podman.podman_image:
+        name: "{{ loki.image }}"
+
+    - name: Grafana image
+      containers.podman.podman_image:
+        name: "{{ grafana.image }}"
+
+  become: true
+  become_user: "{{ podman_user }}"
+
+
+- name: Prometheus Configuration
+  template:
+    src: prometheus/etc/prometheus.yml
+    dest: "{{ prometheus.config }}/prometheus.yml"
+
+- name: AlertManager Configuration
+  template:
+    src: alertmanager/etc/config.yml
+    dest: "{{ alertmanager.config }}/config.yml"
+
+- name: Loki Configuration
+  template:
+    src: loki/etc/config.yml
+    dest: "{{ loki.config }}/config.yml"
+
+- name: Grafana Configuration
+  template:
+    src: grafana/etc/grafana.ini
+    dest: "{{ grafana.config }}/grafana.ini"
+
+- name: Grafana Environment
+  template:
+    src: grafana/etc/grafana.env
+    dest: "{{ grafana.config }}/grafana.env"
+
+# - name: Traefik Configuration
+#   template:
+#     src: traefik/config/traefik.yml
+#     dest: "{{ traefik.config }}/traefik.yml"
+
+# - name: Traefik Proxy Settings
+#   template:
+#     src: traefik/config/dynamic_conf.yml
+#     dest: "{{ traefik.config }}/dynamic_conf.yml"
+
+# - name: Check permissions
+#   file:
+#     path: "{{ item.path }}"
+#     state: directory
+#     owner: "{{ item.owner.split(':')[0] }}"
+#     group: "{{ item.owner.split(':')[1] }}"
+#     mode: "{{ item.mode | default('0777') }}"
+#     recurse: yes
+#   loop: "{{ directories }}"
+
+- name: Set ACLs for container volumes
+  acl:
+    path: "{{ item }}"
+    entity: "{{ podman_user }}"
+    etype: user
+    permissions: rwx
+    state: present
+    default: yes
+  with_items: 
+    - /u01
+    - /u02
+
+- name: Ensure SELinux policy for container volumes
+  sefcontext:
+    target: "{{ item }}"
+    setype: container_file_t
+    state: present
+  with_items: 
+    - '/u01(/.*)?'
+    - '/u02(/.*)?'
+  notify: 
+    - relabel /u01
+    - relabel /u02
+
+- name: Configure Pod 
+  block:
+
+    - name: Configure Pod 
+      containers.podman.podman_pod:
+        name: "{{ pod_name }}"
+        state: started
+        dns:
+        - 10.1.10.10
+        - 10.2.10.10
+        dns_search:
+          - corp.planetmike.org
+          - base.planetmike.org
+        ports:
+          - "9000:9000"
+          - "9090:9090"
+          - "9093:9093"
+          - "3000:3000"
+          - "3100:3100"
+          - "8082:8082"
+
+    - name: Container | Prometheus 
+      containers.podman.podman_container:
+        name: "prometheus"
+        pod: "{{ pod_name }}"
+        image: "{{ prometheus.image }}"
+        state: started
+        log_driver: journald
+        volumes:
+          - "{{ prometheus.config }}:/etc/prometheus"
+          - "{{ prometheus.data }}:/prometheus"
+        command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.console.libraries=/usr/share/prometheus/console_libraries --web.console.templates=/usr/share/prometheus/consoles"
+        recreate: true
+        detach: true
+        rm: true
+
+    - name: Container | Loki 
+      containers.podman.podman_container:
+        name: "loki"
+        pod: "{{ pod_name }}"
+        image: "{{ loki.image }}"
+        state: started
+        log_driver: journald
+        volumes:
+          - "{{ loki.config }}:/etc/loki"
+          - "{{ loki.data }}:/loki"
+          - "{{ loki.wal }}:/wal"
+        command: "--config.file=/etc/loki/config.yml"
+        recreate: true
+        detach: true
+        rm: true
+
+    - name: Container | Alertmanager 
+      containers.podman.podman_container:
+        name: "alertmanager"
+        pod: "{{ pod_name }}"
+        image: "{{ alertmanager.image }}"
+        state: started
+        log_driver: journald
+        volumes:
+          - "{{ alertmanager.config }}:/etc/alertmanager"
+          - "{{ alertmanager.data }}:/alertmanager"
+        command: "--config.file=/etc/alertmanager/config.yml --storage.path=/alertmanager"
+        recreate: true
+        detach: true
+        rm: true
+    
+    - name: Container | Grafana 
+      containers.podman.podman_container:
+        name: "grafana"
+        pod: "{{ pod_name }}"
+        image: "grafana/grafana"
+        state: started
+        log_driver: journald
+        volumes:
+          - "{{ grafana.data }}:/var/lib/grafana"
+          - "{{ grafana.config }}:/etc/grafana"
+          - "{{ grafana.logs }}:/var/log/grafana"
+        env_file: "{{ grafana.config }}/grafana.env"
+        recreate: true
+        detach: true
+
+    
+  become: true
+  become_user: "{{ podman_user }}"
+
+
+
+# - name: Traefik image
+#   become: true
+#   become_user: root
+#   containers.podman.podman_image:
+#     name: "{{ traefik.image }}"
+
+#     # Deploy Traefik container as an SSL termination proxy
+# - name: Container | Traefik
+#   containers.podman.podman_container:
+#     name: traefik
+#     image: "{{ traefik.image }}"
+#     log_driver: journald
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     volumes:
+#       - "{{ traefik.config }}:/etc/traefik"
+#       - "{{ traefik.certs }}:/etc/traefik/certs:ro"
+#       - "{{ traefik.logs }}:/logs:rw"
+#     command:
+#       - "--configFile=/etc/traefik/traefik.yml"
+#     state: started
+#     recreate: true
+#     detach: true
+#     rm: true
+
+- name: Security | Configure firewall services for services
+  firewalld:
+    service: "{{ item }}"
+    permanent: true
+    state: enabled
+  with_items: "{{ monitoring_firewall_allow_services }}"
+  notify:
+    - restart firewalld
+  tags:
+    - baseline
+    - security
+
+- name: Security | Configure firewall ports for services
+  firewalld:
+    port: "{{ item }}"
+    permanent: true
+    state: enabled
+  with_items: "{{ monitoring_firewall_allow_ports }}"
+  notify:
+    - restart firewalld
+  tags:
+    - baseline
+    - security    
