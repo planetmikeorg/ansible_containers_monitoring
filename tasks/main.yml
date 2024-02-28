@@ -76,13 +76,26 @@
 #   loop: "{{ directories }}"
 
 - name: Set ACLs for container volumes
-  acl:
+  ansible.posix.acl:
+    path: "{{ item }}"
+    entity: "{{ podman_user }}"
+    etype: user
+    permissions: rwx
+    state: present
+    recursive: true
+  with_items: 
+    - /u01
+    - /u02
+
+- name: Set default ACLs for container volumes
+  ansible.posix.acl:
     path: "{{ item }}"
     entity: "{{ podman_user }}"
     etype: user
     permissions: rwx
     state: present
     default: yes
+    recursive: true
   with_items: 
     - /u01
     - /u02
@@ -119,21 +132,7 @@
           - "3000:3000"
           - "3100:3100"
           - "8082:8082"
-
-    - name: Container | Prometheus 
-      containers.podman.podman_container:
-        name: "prometheus"
-        pod: "{{ pod_name }}"
-        image: "{{ prometheus.image }}"
-        state: started
-        log_driver: journald
-        volumes:
-          - "{{ prometheus.config }}:/etc/prometheus"
-          - "{{ prometheus.data }}:/prometheus"
-        command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.console.libraries=/usr/share/prometheus/console_libraries --web.console.templates=/usr/share/prometheus/consoles"
-        recreate: true
-        detach: true
-        rm: true
+          
 
     - name: Container | Loki 
       containers.podman.podman_container:
@@ -149,7 +148,25 @@
         command: "--config.file=/etc/loki/config.yml"
         recreate: true
         detach: true
-        rm: true
+
+        # rm: true
+
+    - name: Container | Prometheus 
+      containers.podman.podman_container:
+        name: "prometheus"
+        pod: "{{ pod_name }}"
+        image: "{{ prometheus.image }}"
+        state: started
+        log_driver: journald
+        volumes:
+          - "{{ prometheus.config }}:/etc/prometheus"
+          - "{{ prometheus.data }}:/prometheus"
+        command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.console.libraries=/usr/share/prometheus/console_libraries --web.console.templates=/usr/share/prometheus/consoles"
+        recreate: true
+        detach: true
+        # rm: true
+
+
 
     - name: Container | Alertmanager 
       containers.podman.podman_container:
@@ -164,7 +181,7 @@
         command: "--config.file=/etc/alertmanager/config.yml --storage.path=/alertmanager"
         recreate: true
         detach: true
-        rm: true
+        # rm: true
     
     - name: Container | Grafana 
       containers.podman.podman_container:
@@ -187,31 +204,7 @@
 
 
 
-# - name: Traefik image
-#   become: true
-#   become_user: root
-#   containers.podman.podman_image:
-#     name: "{{ traefik.image }}"
 
-#     # Deploy Traefik container as an SSL termination proxy
-# - name: Container | Traefik
-#   containers.podman.podman_container:
-#     name: traefik
-#     image: "{{ traefik.image }}"
-#     log_driver: journald
-#     ports:
-#       - "80:80"
-#       - "443:443"
-#     volumes:
-#       - "{{ traefik.config }}:/etc/traefik"
-#       - "{{ traefik.certs }}:/etc/traefik/certs:ro"
-#       - "{{ traefik.logs }}:/logs:rw"
-#     command:
-#       - "--configFile=/etc/traefik/traefik.yml"
-#     state: started
-#     recreate: true
-#     detach: true
-#     rm: true
 
 - name: Security | Configure firewall services for services
   firewalld:

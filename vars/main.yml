@@ -1,2 +1,59 @@
 ---
-# vars file for kliksolutions.collector_monitoring
+directories:
+  - path: "{{ directories_config }}/prometheus/etc"
+    owner: "296605:296605"
+  - path: "{{ directories_data }}/prometheus/data"
+    owner: "296605:296605"
+  - path: "{{ directories_config }}/alertmanager/etc"
+    owner: "296605:296605"
+  - path: "{{ directories_data }}/alertmanager/data"
+    owner: "296605:296605"
+  - path: "{{ directories_data }}/loki/loki"
+    owner: "241072:241072"
+  - path: "{{ directories_config }}/loki/etc"
+    owner: "241072:241072"
+  - path: "{{ directories_data }}/loki/wal"
+    owner: "241072:241072"
+  - path: "{{ directories_config }}/promtail/etc"
+    owner: "nobody:nobody"
+  - path: "{{ directories_data }}/promtail/data"
+    owner: "nobody:nobody"
+  - path: "{{ directories_data }}/grafana/data"
+    owner: "231543:231543"
+    mode: "0770"
+  - path: "{{ directories_config }}/grafana/etc"
+    owner: "231543:231543"
+    mode: "0770"
+  - path: "{{ directories_data }}/grafana/logs"
+    owner: "231543:231543"
+    mode: "0770"
+  - path: "{{ directories_config }}/grafana/provisioning"
+    owner: "231543:231543"
+    mode: "0770"
+
+prometheus:
+  image: quay.io/prometheus/prometheus
+  owner: "296605:296605"
+  config: "{{ directories_config }}/prometheus/etc"
+  data: "{{ directories_data }}/prometheus/data" 
+  context: /prometheus
+alertmanager:
+  image: quay.io/prometheus/alertmanager
+  owner: "296605:296605"
+  config: "{{ directories_config }}/alertmanager/etc"
+  data: "{{ directories_data }}/alertmanager/data"   
+  context: /alertmanager
+loki:
+  image: docker.io/grafana/loki
+  owner: "241072:241072"
+  config: "{{ directories_config }}/loki/etc"
+  data: "{{ directories_data }}/loki/loki"   
+  wal: "{{ directories_data }}/loki/wal"
+  context: /loki
+  
+grafana:
+  image: docker.io/grafana/grafana
+  config: "{{ directories_config }}/grafana/etc"
+  data: "{{ directories_data }}/grafana/data"   
+  logs: "{{ directories_data }}/grafana/logs"   
+  context: /grafana
